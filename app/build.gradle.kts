@@ -39,7 +39,7 @@ android {
 
     defaultConfig {
         applicationId = "com.wmods.wppenhacer"
-        minSdk = 28
+        minSdk = 26
         //noinspection OldTargetApi
         targetSdk = 34
         versionCode = 154
