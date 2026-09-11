@@ -97,7 +97,7 @@ jobs:
             XposedBridge.log("[•] This package: ${lpparam.packageName}, first=${lpparam.isFirstApplication}")
             FeatureLoader.start(classLoader, lpparam.appInfo.sourceDir)
             disableSecureFlag()'''
-                    if old in s:
+          if old in s:
               p.write_text(s.replace(old, new, 1))
               print("WppXposed startup block patched")
           else:
