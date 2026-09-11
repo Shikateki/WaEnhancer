@@ -46,8 +46,6 @@ jobs:
           p = Path('app/src/main/java/com/wmods/wppenhacer/xposed/core/WppCore.kt')
           s = p.read_text()
 
-          # Restore the imports removed while switching the bridge. These are
-          # file-local imports and cannot be provided by a package alias file.
           marker = 'package com.wmods.wppenhacer.xposed.core\n'
           imports = '''\nimport com.wmods.wppenhacer.R\nimport com.wmods.wppenhacer.views.dialog.BottomDialogWpp\nimport com.wmods.wppenhacer.xposed.bridge.WaeIIFace\nimport com.wmods.wppenhacer.xposed.core.components.FMessageWpp\nimport com.wmods.wppenhacer.xposed.core.devkit.Unobfuscator\nimport com.wmods.wppenhacer.xposed.core.devkit.UnobfuscatorCache\nimport com.wmods.wppenhacer.xposed.utils.CDSharedPreferences\nimport com.wmods.wppenhacer.xposed.utils.ReflectionUtils\nimport com.wmods.wppenhacer.xposed.utils.Utils\nimport de.robv.android.xposed.XC_MethodHook\nimport de.robv.android.xposed.XposedBridge\nimport de.robv.android.xposed.XposedHelpers\nimport com.wmods.wppenhacer.xposed.core.components.FMessageWpp.UserJid\n'''
           if imports.strip() not in s:
@@ -71,20 +69,37 @@ jobs:
           p = Path('app/src/main/java/com/wmods/wppenhacer/xposed/core/FeatureLoader.kt')
           s = p.read_text()
 
-          # The UI asks WhatsApp for its status through CHECK_WPP. The old
-          # code sent RECEIVER_WPP only after WppCore/plugin initialization,
-          # so any optional hook failure could leave the UI showing the old
-          # LSPosed warning even though EdXposed had loaded the module.
           early = '''registerReceivers()\n\n                        try {'''
-          replacement = '''registerReceivers()\n                        // EdXposed: announce hook presence before optional initialization can fail.\n                        sendEnabledBroadcast(application)\n\n                        try {'''
+          replacement = '''registerReceivers()\n                        // Announce EdXposed hook presence before optional initialization can fail.\n                        sendEnabledBroadcast(application)\n\n                        try {'''
           if early in s:
               s = s.replace(early, replacement, 1)
 
           late = '''\n                            sendEnabledBroadcast(application)\n\n                            val totalTime ='''
           if late in s:
               s = s.replace(late, '''\n                            val totalTime =''', 1)
-
           p.write_text(s)
+          PY
+
+      - name: Fix EdXposed hook startup
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('app/src/main/java/com/wmods/wppenhacer/WppXposed.kt')
+          s = p.read_text()
+
+          old = '''            if (lpparam.isFirstApplication) { // I believe this may fix the problem when using multiple accounts, not yet tested
+                XposedBridge.log("[•] This package: ${lpparam.packageName}")
+                FeatureLoader.start(classLoader, lpparam.appInfo.sourceDir)
+                disableSecureFlag()
+            }'''
+          new = '''            // EdXposed compatibility: some legacy EdXposed builds do not reliably
+            // expose isFirstApplication for WhatsApp. The hook must still be installed.
+            XposedBridge.log("[•] This package: ${lpparam.packageName}, first=${lpparam.isFirstApplication}")
+            FeatureLoader.start(classLoader, lpparam.appInfo.sourceDir)
+            disableSecureFlag()'''
+          if old not in s:
+              raise SystemExit('Expected WppXposed startup block not found')
+          p.write_text(s.replace(old, new, 1))
           PY
 
       - name: Build WhatsApp Release
