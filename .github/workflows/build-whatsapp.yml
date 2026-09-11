@@ -46,6 +46,116 @@ jobs:
           echo '=== ABI directories in AAR ==='
           unzip -Z1 app/libs/dexkit-android.aar | grep -E '^jni/[^/]+/libdexkit\.so$' || true
 
+      - name: Fix DexKit EdXposed native loading
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('app/src/main/java/com/wmods/wppenhacer/xposed/core/devkit/Unobfuscator.kt')
+          s = p.read_text()
+
+          old_import = 'import java.lang.reflect.Modifier\n'
+          new_import = '''import java.lang.reflect.Modifier
+          import java.io.File
+          import java.io.FileOutputStream
+          import java.net.URLDecoder
+          import java.util.zip.ZipFile
+          import android.os.Build
+          '''
+          if 'import java.util.zip.ZipFile' not in s:
+              s = s.replace(old_import, new_import, 1)
+
+          old = '''    init {
+              System.loadLibrary("dexkit")
+          }
+
+          @JvmStatic
+          fun initWithPath(path: String): Boolean {
+              return try {
+                  bridge = DexKitBridge.create(path)
+                  true
+              } catch (_: Exception) {
+                  false
+              }
+          }'''
+
+          new = '''    private fun loadDexKitForEdXposed() {
+              try {
+                  System.loadLibrary("dexkit")
+                  XposedBridge.log("[DexKit] System.loadLibrary succeeded")
+                  return
+              } catch (e: Throwable) {
+                  XposedBridge.log("[DexKit] System.loadLibrary failed: ${e.message}")
+              }
+
+              val moduleApk = try {
+                  val location = Unobfuscator::class.java.protectionDomain?.codeSource?.location
+                  if (location == null) null else File(URLDecoder.decode(location.path, "UTF-8"))
+              } catch (e: Throwable) {
+                  XposedBridge.log("[DexKit] Cannot resolve module APK: ${e.message}")
+                  null
+              }
+
+              if (moduleApk == null || !moduleApk.isFile) {
+                  throw UnsatisfiedLinkError("DexKit module APK not found: $moduleApk")
+              }
+
+              val abi = Build.SUPPORTED_ABIS.firstOrNull { candidate ->
+                  ZipFile(moduleApk).use { zip ->
+                      zip.getEntry("lib/$candidate/libdexkit.so") != null
+                  }
+              } ?: throw UnsatisfiedLinkError("No DexKit ABI for ${Build.SUPPORTED_ABIS.contentToString()}")
+
+              val entryName = "lib/$abi/libdexkit.so"
+              val fileName = "libdexkit_${abi}.so"
+              val roots = arrayOf(
+                  File("/data/user/0/com.whatsapp/cache/waenhancer"),
+                  File("/data/data/com.whatsapp/cache/waenhancer"),
+                  File("/data/user/0/com.whatsapp/files/waenhancer"),
+                  File("/data/data/com.whatsapp/files/waenhancer"),
+                  File("/data/user/0/com.whatsapp/cache"),
+                  File("/data/data/com.whatsapp/cache")
+              )
+
+              var lastError: Throwable? = null
+              for (root in roots) {
+                  try {
+                      if (!root.exists() && !root.mkdirs()) continue
+                      val out = File(root, fileName)
+                      ZipFile(moduleApk).use { zip ->
+                          val entry = zip.getEntry(entryName)
+                              ?: throw UnsatisfiedLinkError("Missing $entryName in module APK")
+                          zip.getInputStream(entry).use { input ->
+                              FileOutputStream(out).use { output -> input.copyTo(output) }
+                          }
+                      }
+                      System.load(out.absolutePath)
+                      XposedBridge.log("[DexKit] Loaded $entryName from ${out.absolutePath}")
+                      return
+                  } catch (e: Throwable) {
+                      lastError = e
+                  }
+              }
+              throw UnsatisfiedLinkError("Could not load DexKit $entryName: ${lastError?.message}")
+          }
+
+          @JvmStatic
+          fun initWithPath(path: String): Boolean {
+              return try {
+                  loadDexKitForEdXposed()
+                  bridge = DexKitBridge.create(path)
+                  true
+              } catch (e: Throwable) {
+                  XposedBridge.log("[DexKit] init failed: ${e.message}")
+                  false
+              }
+          }'''
+
+          if old not in s:
+              raise SystemExit('Expected Unobfuscator DexKit block not found')
+          p.write_text(s.replace(old, new, 1))
+          print('DexKit EdXposed loader patched')
+          PY
+
       - name: Fix legacy WppCore compatibility
         run: |
           python3 - <<'PY'
