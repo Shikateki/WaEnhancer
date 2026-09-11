@@ -11,23 +11,8 @@ import android.os.Environment
 import android.text.TextUtils
 import android.util.LruCache
 import android.widget.Toast
-import androidx.core.content.edit
-import com.wmods.wppenhacer.R
-import com.wmods.wppenhacer.views.dialog.BottomDialogWpp
-import com.wmods.wppenhacer.xposed.bridge.WaeIIFace
+import com.wmods.wppenhacer.xposed.bridge.client.LocalClient
 import com.wmods.wppenhacer.xposed.bridge.client.BaseClient
-import com.wmods.wppenhacer.xposed.bridge.client.BridgeClientKt
-import com.wmods.wppenhacer.xposed.bridge.client.ProviderClientKt
-import com.wmods.wppenhacer.xposed.core.components.FMessageWpp
-import com.wmods.wppenhacer.xposed.core.devkit.Unobfuscator
-import com.wmods.wppenhacer.xposed.core.devkit.UnobfuscatorCache
-import com.wmods.wppenhacer.xposed.utils.CDSharedPreferences
-import com.wmods.wppenhacer.xposed.utils.ReflectionUtils
-import com.wmods.wppenhacer.xposed.utils.Utils
-import de.robv.android.xposed.XC_MethodHook
-import de.robv.android.xposed.XposedBridge
-import de.robv.android.xposed.XposedHelpers
-import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import org.luckypray.dexkit.query.enums.StringMatchType
 import java.io.File
@@ -229,39 +214,10 @@ object WppCore {
     }
 
     fun initBridge(context: Context) {
-        val prefsCacheHooks = UnobfuscatorCache.getInstance().sPrefsCacheHooks
-        val preferredOrder = prefsCacheHooks.getInt("preferredOrder", 1)
+    client = LocalClient()
+    XposedBridge.log("WaEnhancer: Local EdXposed bridge initialized")
+}
 
-        val primaryClient =
-            if (preferredOrder == 0) ProviderClientKt() else BridgeClientKt(context)
-        val fallbackClient =
-            if (preferredOrder == 0) BridgeClientKt(context) else ProviderClientKt()
-
-        if (tryConnectBridge(primaryClient)) return
-
-        if (tryConnectBridge(fallbackClient)) {
-            val newPreferredOrder = if (preferredOrder == 0) 1 else 0
-            prefsCacheHooks.edit { putInt("preferredOrder", newPreferredOrder) }
-            return
-        }
-        throw Exception(context.getString(R.string.bridge_error))
-    }
-
-    @JvmStatic
-    @Throws(Exception::class)
-    private fun tryConnectBridge(baseClient: BaseClient): Boolean {
-        return try {
-            XposedBridge.log("Trying to connect to ${baseClient.javaClass.simpleName}")
-            client = baseClient
-            runBlocking {
-                val canLoad = baseClient.connect()
-                if (!canLoad) throw Exception()
-                true
-            }
-        } catch (_: Exception) {
-            false
-        }
-    }
 
     @JvmStatic
     fun sendMessage(number: String, message: String) {
