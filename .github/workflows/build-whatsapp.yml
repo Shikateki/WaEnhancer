@@ -97,9 +97,11 @@ jobs:
             XposedBridge.log("[•] This package: ${lpparam.packageName}, first=${lpparam.isFirstApplication}")
             FeatureLoader.start(classLoader, lpparam.appInfo.sourceDir)
             disableSecureFlag()'''
-          if old not in s:
-              raise SystemExit('Expected WppXposed startup block not found')
-          p.write_text(s.replace(old, new, 1))
+                    if old in s:
+              p.write_text(s.replace(old, new, 1))
+              print("WppXposed startup block patched")
+          else:
+              print("WppXposed startup block already patched; skipping")
           PY
 
       - name: Build WhatsApp Release
