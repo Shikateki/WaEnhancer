@@ -64,6 +64,29 @@ jobs:
           p.write_text(s)
           PY
 
+      - name: Fix EdXposed WhatsApp status handshake
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('app/src/main/java/com/wmods/wppenhacer/xposed/core/FeatureLoader.kt')
+          s = p.read_text()
+
+          # The UI asks WhatsApp for its status through CHECK_WPP. The old
+          # code sent RECEIVER_WPP only after WppCore/plugin initialization,
+          # so any optional hook failure could leave the UI showing the old
+          # LSPosed warning even though EdXposed had loaded the module.
+          early = '''registerReceivers()\n\n                        try {'''
+          replacement = '''registerReceivers()\n                        // EdXposed: announce hook presence before optional initialization can fail.\n                        sendEnabledBroadcast(application)\n\n                        try {'''
+          if early in s:
+              s = s.replace(early, replacement, 1)
+
+          late = '''\n                            sendEnabledBroadcast(application)\n\n                            val totalTime ='''
+          if late in s:
+              s = s.replace(late, '''\n                            val totalTime =''', 1)
+
+          p.write_text(s)
+          PY
+
       - name: Build WhatsApp Release
         run: ./gradlew assembleWhatsappDebug -Pminify=true
 
