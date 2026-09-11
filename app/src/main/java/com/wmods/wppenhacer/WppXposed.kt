@@ -79,11 +79,12 @@ class WppXposed : IXposedHookLoadPackage, IXposedHookInitPackageResources, IXpos
         ScopeHook.hook(lpparam)
 
         if ((packageName == FeatureLoader.PACKAGE_WPP && App.isOriginalPackage) || packageName == FeatureLoader.PACKAGE_BUSINESS) {
-            if (lpparam.isFirstApplication) { // I believe this may fix the problem when using multiple accounts, not yet tested
-                XposedBridge.log("[•] This package: ${lpparam.packageName}")
-                FeatureLoader.start(classLoader, lpparam.appInfo.sourceDir)
-                disableSecureFlag()
-            }
+            // Do not require isFirstApplication: EdXposed can expose WhatsApp's
+            // main process differently, which otherwise prevents FeatureLoader
+            // from ever registering its hooks/status receiver.
+            XposedBridge.log("[•] This package: ${lpparam.packageName}, first=${lpparam.isFirstApplication}")
+            FeatureLoader.start(classLoader, lpparam.appInfo.sourceDir)
+            disableSecureFlag()
         }
     }
 
