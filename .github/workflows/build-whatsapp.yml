@@ -45,6 +45,14 @@ jobs:
           from pathlib import Path
           p = Path('app/src/main/java/com/wmods/wppenhacer/xposed/core/WppCore.kt')
           s = p.read_text()
+
+          # Restore the imports removed while switching the bridge. These are
+          # file-local imports and cannot be provided by a package alias file.
+          marker = 'package com.wmods.wppenhacer.xposed.core\n'
+          imports = '''\nimport com.wmods.wppenhacer.R\nimport com.wmods.wppenhacer.views.dialog.BottomDialogWpp\nimport com.wmods.wppenhacer.xposed.bridge.WaeIIFace\nimport com.wmods.wppenhacer.xposed.core.components.FMessageWpp\nimport com.wmods.wppenhacer.xposed.core.devkit.Unobfuscator\nimport com.wmods.wppenhacer.xposed.core.devkit.UnobfuscatorCache\nimport com.wmods.wppenhacer.xposed.utils.CDSharedPreferences\nimport com.wmods.wppenhacer.xposed.utils.ReflectionUtils\nimport com.wmods.wppenhacer.xposed.utils.Utils\nimport de.robv.android.xposed.XC_MethodHook\nimport de.robv.android.xposed.XposedBridge\nimport de.robv.android.xposed.XposedHelpers\nimport com.wmods.wppenhacer.xposed.core.components.FMessageWpp.UserJid\n'''
+          if imports.strip() not in s:
+              s = s.replace(marker, marker + imports, 1)
+
           replacements = {
               'getPrivPrefs().edit(commit = true) { putString(key, value) }': 'getPrivPrefs().edit().putString(key, value).commit()',
               'getPrivPrefs().edit(commit = true) { putString(key, value.toString()) }': 'getPrivPrefs().edit().putString(key, value.toString()).commit()',
