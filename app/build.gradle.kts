@@ -78,7 +78,9 @@ android {
         }
 
         jniLibs {
-            useLegacyPackaging = false
+            // DexKit is loaded with System.loadLibrary("dexkit"). Keep JNI
+            // libraries in the APK for legacy Xposed/EdXposed loading.
+            useLegacyPackaging = true
         }
     }
 
