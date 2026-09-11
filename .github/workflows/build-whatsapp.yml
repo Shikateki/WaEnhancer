@@ -39,6 +39,23 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
+      - name: Fix legacy WppCore compatibility
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('app/src/main/java/com/wmods/wppenhacer/xposed/core/WppCore.kt')
+          s = p.read_text()
+          replacements = {
+              'getPrivPrefs().edit(commit = true) { putString(key, value) }': 'getPrivPrefs().edit().putString(key, value).commit()',
+              'getPrivPrefs().edit(commit = true) { putString(key, value.toString()) }': 'getPrivPrefs().edit().putString(key, value.toString()).commit()',
+              'prefs.edit(commit = true) { remove(s) }': 'prefs.edit().remove(s).commit()',
+              'getPrivPrefs().edit(commit = true) { putBoolean(key, value) }': 'getPrivPrefs().edit().putBoolean(key, value).commit()',
+          }
+          for old, new in replacements.items():
+              s = s.replace(old, new)
+          p.write_text(s)
+          PY
+
       - name: Build WhatsApp Release
         run: ./gradlew assembleWhatsappDebug -Pminify=true
 
